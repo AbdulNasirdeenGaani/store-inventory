@@ -4,6 +4,11 @@ let currentUser = null;
 let productsCache = [];
 let stockChart = null;
 
+function formatPrice(value) {
+    const price = Number(value);
+    return Number.isFinite(price) ? price.toFixed(2) : "0.00";
+}
+
 async function login() {
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
@@ -97,6 +102,7 @@ function renderProductTable(products) {
                 <td>${index + 1}</td>
                 <td>${product.name}</td>
                 <td>${product.category || "General"}</td>
+                <td>${formatPrice(product.price)}</td>
                 <td>${product.originalStock}</td>
                 <td>${product.stockRemaining}</td>
                 <td>${product.reorderLevel}</td>
@@ -155,6 +161,7 @@ async function saveProduct() {
     const product = {
         name: document.getElementById("name").value.trim(),
         category: document.getElementById("category").value.trim(),
+        price: Number(document.getElementById("price").value) || 0,
         originalStock: Number(document.getElementById("originalStock").value) || 0,
         stockRemaining: Number(document.getElementById("stockRemaining").value) || 0,
         reorderLevel: Number(document.getElementById("reorderLevel").value) || 10
@@ -167,7 +174,6 @@ async function saveProduct() {
 
     const url = id ? `${API_URL}/products/${id}` : `${API_URL}/products`;
     const method = id ? "PUT" : "POST";
-    console.log("saveProduct", { id, method, url, product });
 
     const res = await fetch(url, {
         method,
@@ -195,6 +201,7 @@ function editProduct(id) {
     document.getElementById("productId").value = product._id;
     document.getElementById("name").value = product.name;
     document.getElementById("category").value = product.category;
+    document.getElementById("price").value = product.price ?? 0;
     document.getElementById("originalStock").value = product.originalStock;
     document.getElementById("stockRemaining").value = product.stockRemaining;
     document.getElementById("reorderLevel").value = product.reorderLevel;
@@ -219,6 +226,7 @@ function clearForm() {
     document.getElementById("productId").value = "";
     document.getElementById("name").value = "";
     document.getElementById("category").value = "";
+    document.getElementById("price").value = "";
     document.getElementById("originalStock").value = "";
     document.getElementById("stockRemaining").value = "";
     document.getElementById("reorderLevel").value = "";
@@ -245,8 +253,8 @@ async function loadDashboard() {
 
 function exportExcel() {
     if (!productsCache.length) return alert("No products to export.");
-    const headers = ["Name", "Category", "Original Stock", "Stock Remaining", "Reorder Level", "Last Updated"];
-    const rows = productsCache.map(p => [p.name, p.category, p.originalStock, p.stockRemaining, p.reorderLevel, new Date(p.lastUpdated).toLocaleString()]);
+    const headers = ["Name", "Category", "Price", "Original Stock", "Stock Remaining", "Reorder Level", "Last Updated"];
+    const rows = productsCache.map(p => [p.name, p.category, formatPrice(p.price), p.originalStock, p.stockRemaining, p.reorderLevel, new Date(p.lastUpdated).toLocaleString()]);
     const csvContent = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -264,12 +272,12 @@ function exportPDF() {
     doc.setFontSize(14);
     doc.text("Inventory Export", 14, 20);
     let y = 30;
-    const headers = ["#", "Name", "Remaining"];
+    const headers = ["#", "Name", "Price", "Remaining"];
     doc.setFontSize(10);
     doc.text(headers.join(" | "), 14, y);
     y += 8;
     productsCache.slice(0, 25).forEach((p, index) => {
-        const row = [index + 1, p.name, p.stockRemaining].join(" | ");
+        const row = [index + 1, p.name, formatPrice(p.price), p.stockRemaining].join(" | ");
         doc.text(row, 14, y);
         y += 6;
         if (y > 280) {

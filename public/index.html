@@ -22,7 +22,7 @@
         <input type="text" id="username" placeholder="Username">
         <input type="password" id="password" placeholder="Password">
         <button onclick="login()">Login</button>
-        <div class="auth-note">Use admin/admin123 or staff/staff123</div>
+        <!-- <div class="auth-note">Use admin/admin123 or staff/staff123</div> -->
     </div>
 
     <div class="app-grid hidden" id="appContainer">
@@ -60,6 +60,7 @@
                 <!-- <input type="text" id="barcode" placeholder="Barcode / Scan Here"> -->
                 <input type="text" id="name" placeholder="Product Name">
                 <input type="text" id="category" placeholder="Category">
+                <input type="number" step="0.01" id="price" placeholder="Price">
                 <input type="number" id="originalStock" placeholder="Original Stock">
                 <input type="number" id="stockRemaining" placeholder="Stock Remaining">
                 <input type="number" id="reorderLevel" placeholder="Reorder Level">
@@ -74,6 +75,7 @@
                             <th>#</th>
                             <th>Name</th>
                             <th>Category</th>
+                            <th>Price</th>
                             <th>Original</th>
                             <th>Remaining</th>
                             <th>Reorder Level</th>

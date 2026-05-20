@@ -2,13 +2,18 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Product = require("./models/Product");
 const User = require("./models/User");
 
+
+dotenv.config();
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET || "inventory_secret_key";
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/electricalStoreDB";
 const LOW_STOCK_THRESHOLD = 10;
 
 app.use(cors());
@@ -17,14 +22,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use(express.json());
 
-mongoose.connect("mongodb://127.0.0.1:27017/electricalStoreDB")
+// mongoose.connect("mongodb://127.0.0.1:27017/electricalStoreDB")
+mongoose.connect(MONGO_URI)
     .then(async () => {
         console.log("MongoDB Connected");
         const count = await User.countDocuments();
         if (count === 0) {
             await User.createUser("admin", "admin123", "admin");
             await User.createUser("staff", "staff123", "staff");
-            console.log("Created default admin/admin123 and staff/staff123 users");
         }
     })
     .catch(err => console.log(err));
@@ -85,7 +90,12 @@ app.get("/products", authenticateToken, async (req, res) => {
     }
 
     const products = await Product.find(query).sort({ name: 1 });
-    res.json(products);
+    const normalizedProducts = products.map(product => {
+        const obj = product.toObject();
+        obj.price = typeof obj.price === "number" ? obj.price : 0;
+        return obj;
+    });
+    res.json(normalizedProducts);
 });
 
 app.post("/products", authenticateToken, authorizeRole("admin", "staff"), async (req, res) => {
@@ -93,9 +103,10 @@ app.post("/products", authenticateToken, authorizeRole("admin", "staff"), async 
         // barcode: req.body.barcode,
         name: req.body.name,
         category: req.body.category,
-        originalStock: req.body.originalStock || 0,
-        stockRemaining: req.body.stockRemaining || 0,
-        reorderLevel: req.body.reorderLevel || LOW_STOCK_THRESHOLD,
+        price: Number(req.body.price) || 0,
+        originalStock: Number(req.body.originalStock) || 0,
+        stockRemaining: Number(req.body.stockRemaining) || 0,
+        reorderLevel: Number(req.body.reorderLevel) || LOW_STOCK_THRESHOLD,
         lastUpdated: new Date()
     });
     await product.save();
@@ -109,9 +120,10 @@ app.put("/products/:id", authenticateToken, authorizeRole("admin", "staff"), asy
             // barcode: req.body.barcode,
             name: req.body.name,
             category: req.body.category,
-            originalStock: req.body.originalStock || 0,
-            stockRemaining: req.body.stockRemaining || 0,
-            reorderLevel: req.body.reorderLevel || LOW_STOCK_THRESHOLD,
+            price: Number(req.body.price) || 0,
+            originalStock: Number(req.body.originalStock) || 0,
+            stockRemaining: Number(req.body.stockRemaining) || 0,
+            reorderLevel: Number(req.body.reorderLevel) || LOW_STOCK_THRESHOLD,
             lastUpdated: new Date()
         },
         { new: true }
@@ -126,10 +138,15 @@ app.delete("/products/:id", authenticateToken, authorizeRole("admin"), async (re
 
 app.get("/dashboard-summary", authenticateToken, async (req, res) => {
     const products = await Product.find();
-    const totalItems = products.length;
-    const totalStock = products.reduce((sum, item) => sum + (item.stockRemaining || 0), 0);
-    const lowStockCount = products.filter(item => item.stockRemaining <= (item.reorderLevel || LOW_STOCK_THRESHOLD)).length;
-    res.json({ totalItems, totalStock, lowStockCount, products });
+    const normalizedProducts = products.map(product => {
+        const obj = product.toObject();
+        obj.price = typeof obj.price === "number" ? obj.price : 0;
+        return obj;
+    });
+    const totalItems = normalizedProducts.length;
+    const totalStock = normalizedProducts.reduce((sum, item) => sum + (item.stockRemaining || 0), 0);
+    const lowStockCount = normalizedProducts.filter(item => item.stockRemaining <= (item.reorderLevel || LOW_STOCK_THRESHOLD)).length;
+    res.json({ totalItems, totalStock, lowStockCount, products: normalizedProducts });
 });
 
 app.use((err, req, res, next) => {
@@ -137,7 +154,7 @@ app.use((err, req, res, next) => {
     res.status(err.status || 500).json({ message: err.message || "Server error" });
 });
 
-const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
