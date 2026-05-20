@@ -136,10 +136,6 @@ app.delete("/products/:id", authenticateToken, authorizeRole("admin"), async (re
     res.json({ message: "Product deleted" });
 });
 
-app.get("/", (req, res) => {
-    res.send("Welcome to the Electrical Store Inventory API");
-});
-
 app.get("/dashboard-summary", authenticateToken, async (req, res) => {
     const products = await Product.find();
     const normalizedProducts = products.map(product => {
