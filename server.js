@@ -1,3 +1,4 @@
+// Imports
 require("dotenv").config();
 
 const express = require("express");
@@ -11,11 +12,13 @@ const jwt = require("jsonwebtoken");
 const Product = require("./models/Product");
 const User = require("./models/User");
 
+// Variables
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
+// Config validation
 if (!MONGO_URI) {
     throw new Error("MONGO_URI is required");
 }
@@ -24,8 +27,8 @@ if (!process.env.JWT_SECRET && isProduction) {
     throw new Error("JWT_SECRET must be set in production");
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
-const LOW_STOCK_THRESHOLD = 10;
+const JWT_SECRET = process.env.JWT_SECRET || "nashElectricalsecretkey";
+const LOW_STOCK_THRESHOLD = 1;
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "")
     .split(",")
     .map(value => value.trim())
@@ -80,11 +83,13 @@ app.use(cors({
     credentials: true
 }));
 
+// Middleware
 app.use(cookieParser());
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Database connection
 mongoose.set("strictQuery", true);
 
 mongoose.connect(MONGO_URI)
