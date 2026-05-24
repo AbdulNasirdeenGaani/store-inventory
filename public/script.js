@@ -1,5 +1,4 @@
-const API_URL = "http://localhost:5000";
-let authToken = localStorage.getItem("inventoryToken") || "";
+const API_URL = "";
 let currentUser = null;
 let productsCache = [];
 let stockChart = null;
@@ -9,81 +8,169 @@ function formatPrice(value) {
     return Number.isFinite(price) ? price.toFixed(2) : "0.00";
 }
 
+async function authRequest(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        credentials: "same-origin",
+        headers: {
+            "Content-Type": "application/json",
+            ...options.headers
+        }
+    });
+
+    if (response.status === 401 || response.status === 403) {
+        logout();
+    }
+
+    return response;
+}
+
 async function login() {
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
+
     if (!username || !password) {
         alert("Enter username and password.");
         return;
     }
 
-    const res = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
-    });
+    try {
+        const response = await authRequest(`${API_URL}/auth/login`, {
+            method: "POST",
+            body: JSON.stringify({ username, password })
+        });
 
-    if (!res.ok) {
-        const error = await res.json();
-        alert(error.message || "Login failed");
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            alert(error.message || "Login failed");
+            return;
+        }
+
+        const data = await response.json();
+        currentUser = { username: data.username, role: data.role };
+        showApp();
+        await loadProducts();
+        await loadDashboard();
+    } catch (error) {
+        alert(error.message || "Login failed due to network or server error.");
+    }
+}
+
+function showSignup() {
+    document.getElementById("loginPanel").classList.add("hidden");
+    document.getElementById("signupPanel").classList.remove("hidden");
+}
+
+function showLogin() {
+    document.getElementById("signupPanel").classList.add("hidden");
+    document.getElementById("loginPanel").classList.remove("hidden");
+}
+
+function showApp() {
+    document.getElementById("logoutButton").classList.remove("hidden");
+    document.getElementById("loginPanel").classList.add("hidden");
+    document.getElementById("signupPanel").classList.add("hidden");
+    document.getElementById("appContainer").classList.remove("hidden");
+    document.getElementById("themeToggle").classList.remove("hidden");
+}
+
+async function signup() {
+    const username = document.getElementById("signupUsername").value.trim();
+    const password = document.getElementById("signupPassword").value.trim();
+
+    if (!username || !password) {
+        alert("Enter username and password to sign up.");
         return;
     }
 
-    const data = await res.json();
-    authToken = data.token;
-    localStorage.setItem("inventoryToken", authToken);
-    currentUser = { username: data.username, role: data.role };
-    document.getElementById("logoutButton").classList.remove("hidden");
-    document.getElementById("loginPanel").classList.add("hidden");
-    document.getElementById("appContainer").classList.remove("hidden");
-    document.getElementById("themeToggle").classList.remove("hidden");
-    loadProducts();
-    loadDashboard();
+    try {
+        const response = await authRequest(`${API_URL}/auth/signup`, {
+            method: "POST",
+            body: JSON.stringify({ username, password })
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            alert(error.message || "Signup failed");
+            return;
+        }
+
+        const data = await response.json();
+        currentUser = { username: data.username, role: data.role };
+        showApp();
+        await loadProducts();
+        await loadDashboard();
+    } catch (error) {
+        alert(error.message || "Signup failed due to network or server error.");
+    }
 }
 
-function logout() {
-    authToken = "";
+async function logout() {
     currentUser = null;
-    localStorage.removeItem("inventoryToken");
+
+    try {
+        await fetch(`${API_URL}/auth/logout`, {
+            method: "POST",
+            credentials: "same-origin"
+        });
+    } catch (error) {
+        // Ignore logout failures while resetting the UI safely.
+    }
+
+    productsCache = [];
+    clearProductTable();
     document.getElementById("logoutButton").classList.add("hidden");
     document.getElementById("loginPanel").classList.remove("hidden");
     document.getElementById("appContainer").classList.add("hidden");
+    document.getElementById("themeToggle").classList.add("hidden");
+    document.getElementById("signupPanel").classList.add("hidden");
+    document.getElementById("lowStockAlert").textContent = "All products are above reorder level.";
+    document.getElementById("lowStockAlert").classList.remove("alert");
+    document.getElementById("summaryTotalItems").textContent = "0";
+    document.getElementById("summaryTotalStock").textContent = "0";
+    document.getElementById("summaryLowStock").textContent = "0";
 }
 
 async function loadCurrentUser() {
-    if (!authToken) return;
     try {
-        const res = await fetch(`${API_URL}/auth/me`, {
-            headers: { Authorization: `Bearer ${authToken}` }
-        });
-        if (!res.ok) throw new Error("Invalid token");
-        currentUser = await res.json();
-        document.getElementById("logoutButton").classList.remove("hidden");
-        document.getElementById("loginPanel").classList.add("hidden");
-        document.getElementById("appContainer").classList.remove("hidden");
-        loadProducts();
-        loadDashboard();
-    } catch (err) {
-        logout();
+        const response = await authRequest(`${API_URL}/auth/me`);
+        if (!response.ok) {
+            return;
+        }
+
+        currentUser = await response.json();
+        showApp();
+        await loadProducts();
+        await loadDashboard();
+    } catch (error) {
+        await logout();
     }
 }
 
 async function loadProducts() {
     const q = document.getElementById("searchQuery").value.trim();
     const query = q ? `?q=${encodeURIComponent(q)}` : "";
-    const res = await fetch(`${API_URL}/products${query}`, {
-        headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (!res.ok) {
-        if (res.status === 401 || res.status === 403) logout();
-        return;
-    }
 
-    const products = await res.json();
-    productsCache = products;
-    renderProductTable(products);
-    renderLowStockAlert(products);
-    renderChart(products);
+    try {
+        const response = await authRequest(`${API_URL}/products${query}`);
+        if (!response.ok) {
+            return;
+        }
+
+        const products = await response.json();
+        productsCache = products;
+        renderProductTable(products);
+        renderLowStockAlert(products);
+        renderChart(products);
+    } catch (error) {
+        console.error(error);
+        alert("Unable to load products. Check your server or network.");
+    }
+}
+
+function clearProductTable() {
+    const table = document.getElementById("productTable");
+    table.innerHTML = "";
 }
 
 function renderProductTable(products) {
@@ -91,49 +178,79 @@ function renderProductTable(products) {
     table.innerHTML = "";
 
     if (!products.length) {
-        table.innerHTML = `<tr><td colspan="9">No products found.</td></tr>`;
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 9;
+        cell.textContent = "No products found.";
+        row.appendChild(cell);
+        table.appendChild(row);
         return;
     }
 
     products.forEach((product, index) => {
-        const canDelete = currentUser?.role === "admin";
-        table.innerHTML += `
-            <tr>
-                <td>${index + 1}</td>
-                <td>${product.name}</td>
-                <td>${product.category || "General"}</td>
-                <td>${formatPrice(product.price)}</td>
-                <td>${product.originalStock}</td>
-                <td>${product.stockRemaining}</td>
-                <td>${product.reorderLevel}</td>
-                <td>${new Date(product.lastUpdated).toLocaleDateString()}</td>
-                <td>
-                    <button onclick="editProduct('${product._id}')">Edit</button>
-                    ${canDelete ? `<button class="danger" onclick="deleteProduct('${product._id}')">Delete</button>` : ""}
-                </td>
-            </tr>
-        `;
+        const row = document.createElement("tr");
+
+        const cells = [
+            String(index + 1),
+            product.name,
+            product.category || "General",
+            formatPrice(product.price),
+            String(product.originalStock),
+            String(product.stockRemaining),
+            String(product.reorderLevel),
+            new Date(product.lastUpdated).toLocaleDateString(),
+            ""
+        ];
+
+        cells.forEach((value, cellIndex) => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.appendChild(cell);
+        });
+
+        const actionsCell = row.children[8];
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.textContent = "Edit";
+        editButton.addEventListener("click", () => editProduct(product._id));
+        actionsCell.appendChild(editButton);
+
+        if (currentUser?.role === "admin") {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "danger";
+            deleteButton.textContent = "Delete";
+            deleteButton.addEventListener("click", () => deleteProduct(product._id));
+            actionsCell.appendChild(deleteButton);
+        }
+
+        table.appendChild(row);
     });
 }
 
 function renderLowStockAlert(products) {
     const lowStock = products.filter(item => item.stockRemaining <= item.reorderLevel);
     const alertBox = document.getElementById("lowStockAlert");
+
     if (!lowStock.length) {
         alertBox.textContent = "All products are above reorder level.";
         alertBox.classList.remove("alert");
         return;
     }
+
     alertBox.textContent = `Low stock alert: ${lowStock.length} product(s) need reorder.`;
     alertBox.classList.add("alert");
 }
 
 function renderChart(products) {
     const ctx = document.getElementById("stockChart").getContext("2d");
-    const labels = products.slice(0, 10).map(p => p.name);
-    const data = products.slice(0, 10).map(p => p.stockRemaining);
+    const labels = products.slice(0, 10).map(product => product.name);
+    const data = products.slice(0, 10).map(product => product.stockRemaining);
 
-    if (stockChart) stockChart.destroy();
+    if (stockChart) {
+        stockChart.destroy();
+    }
+
     stockChart = new Chart(ctx, {
         type: "bar",
         data: {
@@ -175,29 +292,28 @@ async function saveProduct() {
     const url = id ? `${API_URL}/products/${id}` : `${API_URL}/products`;
     const method = id ? "PUT" : "POST";
 
-    const res = await fetch(url, {
+    const response = await authRequest(url, {
         method,
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`
-        },
         body: JSON.stringify(product)
     });
 
-    if (!res.ok) {
-        const err = await res.json();
-        alert(err.message || "Unable to save product.");
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(error.message || "Unable to save product.");
         return;
     }
 
     clearForm();
-    loadProducts();
-    loadDashboard();
+    await loadProducts();
+    await loadDashboard();
 }
 
 function editProduct(id) {
-    const product = productsCache.find(p => p._id === id);
-    if (!product) return;
+    const product = productsCache.find(item => item._id === id);
+    if (!product) {
+        return;
+    }
+
     document.getElementById("productId").value = product._id;
     document.getElementById("name").value = product.name;
     document.getElementById("category").value = product.category;
@@ -208,18 +324,22 @@ function editProduct(id) {
 }
 
 async function deleteProduct(id) {
-    if (!confirm("Delete this product?")) return;
-    const res = await fetch(`${API_URL}/products/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        alert(err.message || "Unable to delete product.");
+    if (!confirm("Delete this product?")) {
         return;
     }
-    loadProducts();
-    loadDashboard();
+
+    const response = await authRequest(`${API_URL}/products/${id}`, {
+        method: "DELETE"
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        alert(error.message || "Unable to delete product.");
+        return;
+    }
+
+    await loadProducts();
+    await loadDashboard();
 }
 
 function clearForm() {
@@ -241,21 +361,42 @@ function toggleTheme() {
 }
 
 async function loadDashboard() {
-    const res = await fetch(`${API_URL}/dashboard-summary`, {
-        headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (!res.ok) return;
-    const summary = await res.json();
-    document.getElementById("summaryTotalItems").textContent = summary.totalItems;
-    document.getElementById("summaryTotalStock").textContent = summary.totalStock;
-    document.getElementById("summaryLowStock").textContent = summary.lowStockCount;
+    try {
+        const response = await authRequest(`${API_URL}/dashboard-summary`);
+        if (!response.ok) {
+            return;
+        }
+
+        const summary = await response.json();
+        document.getElementById("summaryTotalItems").textContent = summary.totalItems;
+        document.getElementById("summaryTotalStock").textContent = summary.totalStock;
+        document.getElementById("summaryLowStock").textContent = summary.lowStockCount;
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 function exportExcel() {
-    if (!productsCache.length) return alert("No products to export.");
+    if (!productsCache.length) {
+        alert("No products to export.");
+        return;
+    }
+
     const headers = ["Name", "Category", "Price", "Original Stock", "Stock Remaining", "Reorder Level", "Last Updated"];
-    const rows = productsCache.map(p => [p.name, p.category, formatPrice(p.price), p.originalStock, p.stockRemaining, p.reorderLevel, new Date(p.lastUpdated).toLocaleString()]);
-    const csvContent = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const rows = productsCache.map(product => [
+        product.name,
+        product.category,
+        formatPrice(product.price),
+        product.originalStock,
+        product.stockRemaining,
+        product.reorderLevel,
+        new Date(product.lastUpdated).toLocaleString()
+    ]);
+
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -266,25 +407,33 @@ function exportExcel() {
 }
 
 function exportPDF() {
-    if (!productsCache.length) return alert("No products to export.");
+    if (!productsCache.length) {
+        alert("No products to export.");
+        return;
+    }
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     doc.setFontSize(14);
     doc.text("Inventory Export", 14, 20);
+
     let y = 30;
     const headers = ["#", "Name", "Price", "Remaining"];
     doc.setFontSize(10);
     doc.text(headers.join(" | "), 14, y);
     y += 8;
-    productsCache.slice(0, 25).forEach((p, index) => {
-        const row = [index + 1, p.name, formatPrice(p.price), p.stockRemaining].join(" | ");
+
+    productsCache.slice(0, 25).forEach((product, index) => {
+        const row = [index + 1, product.name, formatPrice(product.price), product.stockRemaining].join(" | ");
         doc.text(row, 14, y);
         y += 6;
+
         if (y > 280) {
             doc.addPage();
             y = 20;
         }
     });
+
     doc.save("inventory-export.pdf");
 }
 
@@ -294,7 +443,22 @@ function applyTheme() {
     document.getElementById("themeToggle").textContent = theme === "dark" ? "Light Mode" : "Dark Mode";
 }
 
+function bindEvents() {
+    document.getElementById("loginButton").addEventListener("click", login);
+    document.getElementById("signupButton").addEventListener("click", signup);
+    document.getElementById("showSignupButton").addEventListener("click", showSignup);
+    document.getElementById("showLoginButton").addEventListener("click", showLogin);
+    document.getElementById("logoutButton").addEventListener("click", logout);
+    document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+    document.getElementById("saveProductButton").addEventListener("click", saveProduct);
+    document.getElementById("clearProductButton").addEventListener("click", clearForm);
+    document.getElementById("exportExcelButton").addEventListener("click", exportExcel);
+    document.getElementById("exportPDFButton").addEventListener("click", exportPDF);
+    document.getElementById("searchQuery").addEventListener("input", loadProducts);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
+    bindEvents();
     applyTheme();
     loadCurrentUser();
 });

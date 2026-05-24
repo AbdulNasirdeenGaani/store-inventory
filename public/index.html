@@ -12,17 +12,25 @@
     <div class="topbar">
         <div class="logo">Electrical Store Inventory</div>
         <div class="top-actions">
-            <button id="themeToggle" onclick="toggleTheme()">Dark Mode</button>
-            <button id="logoutButton" onclick="logout()" class="hidden">Logout</button>
+            <button id="themeToggle" type="button">Dark Mode</button>
+            <button id="logoutButton" type="button" class="hidden">Logout</button>
         </div>
     </div>
 
     <div class="auth-panel" id="loginPanel">
         <h2>Login</h2>
-        <input type="text" id="username" placeholder="Username">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="login()">Login</button>
-        <!-- <div class="auth-note">Use admin/admin123 or staff/staff123</div> -->
+        <input type="text" id="username" placeholder="Username" autocomplete="username" required>
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+        <button id="loginButton" type="button">Login</button>
+        <p class="auth-note">No account? <button id="showSignupButton" type="button">Sign Up</button></p>
+    </div>
+
+    <div class="auth-panel hidden" id="signupPanel">
+        <h2>Sign Up</h2>
+        <input type="text" id="signupUsername" placeholder="Username" autocomplete="username" required>
+        <input type="password" id="signupPassword" placeholder="Password" autocomplete="new-password" required>
+        <button id="signupButton" type="button">Create Account</button>
+        <p class="auth-note">Already have an account? <button id="showLoginButton" type="button">Login</button></p>
     </div>
 
     <div class="app-grid hidden" id="appContainer">
@@ -49,23 +57,22 @@
 
         <section class="controls-panel">
             <div class="search-row">
-                <input type="search" id="searchQuery" placeholder="Search by name, number, or category" oninput="loadProducts()">
-                <button onclick="exportExcel()">Export Excel</button>
-                <button onclick="exportPDF()">Export PDF</button>
+                <input type="search" id="searchQuery" placeholder="Search by name, number, or category">
+                <button id="exportExcelButton" type="button">Export Excel</button>
+                <button id="exportPDFButton" type="button">Export PDF</button>
             </div>
             <div class="low-stock-alert" id="lowStockAlert"></div>
 
             <div class="form-container">
                 <input type="hidden" id="productId">
-                <!-- <input type="text" id="barcode" placeholder="Barcode / Scan Here"> -->
-                <input type="text" id="name" placeholder="Product Name">
-                <input type="text" id="category" placeholder="Category">
-                <input type="number" step="0.01" id="price" placeholder="Price">
-                <input type="number" id="originalStock" placeholder="Original Stock">
-                <input type="number" id="stockRemaining" placeholder="Stock Remaining">
-                <input type="number" id="reorderLevel" placeholder="Reorder Level">
-                <button type="button" onclick="saveProduct()">Save Product</button>
-                <button type="button" onclick="clearForm()" class="secondary">Clear</button>
+                <input type="text" id="name" placeholder="Product Name" required>
+                <input type="text" id="category" placeholder="Category" required>
+                <input type="number" step="0.01" id="price" placeholder="Price" required>
+                <input type="number" id="originalStock" placeholder="Original Stock" required>
+                <input type="number" id="stockRemaining" placeholder="Stock Remaining" required>
+                <input type="number" id="reorderLevel" placeholder="Reorder Level" required>
+                <button id="saveProductButton" type="button">Save Product</button>
+                <button id="clearProductButton" type="button" class="secondary">Clear</button>
             </div>
 
             <div class="table-container">
@@ -80,7 +87,6 @@
                             <th>Remaining</th>
                             <th>Reorder Level</th>
                             <th>Updated</th>
-                            <!-- <th>Barcode</th> -->
                             <th>Actions</th>
                         </tr>
                     </thead>
