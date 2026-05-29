@@ -49,6 +49,9 @@ const authCookieOptions = {
     maxAge: 8 * 60 * 60 * 1000
 };
 
+// enable trust proxy for secure cookies behind proxies
+
+app.set("trust proxy", true);
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
